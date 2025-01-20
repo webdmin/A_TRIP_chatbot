@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kavach Query System</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Poppins', sans-serif;
+            background-color: #f4f6f9;
+            margin: 0;
+            padding: 0;
+        }
+        .container {
+            width: 100%;
+            max-width: 800px;
+            margin: 50px auto;
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+        }
+        h1 {
+            text-align: center;
+            color: #4CAF50;
+        }
+        .chat-box {
+            max-height: 400px;
+            overflow-y: auto;
+            padding: 10px;
+            margin-bottom: 20px;
+            border: 1px solid #ddd;
+            border-radius: 10px;
+            background-color: #f9f9f9;
+        }
+        .chat-entry {
+            margin-bottom: 15px;
+            padding: 10px;
+            border-radius: 10px;
+        }
+        .user-entry {
+            background-color: #DCF8C6;
+            text-align: right;
+        }
+        .bot-entry {
+            background-color: #f0f0f0;
+        }
+        input[type="text"] {
+            width: calc(100% - 100px);
+            padding: 10px;
+            border-radius: 5px;
+            border: 1px solid #ddd;
+            font-size: 16px;
+            margin-right: 10px;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 12px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        .loading-spinner {
+            display: none;
+            margin-left: 10px;
+            border: 4px solid rgba(255, 255, 255, 0.3);
+            border-top: 4px solid #4CAF50;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .image-container {
+            margin-top: 10px;
+        }
+        img {
+            max-width: 100%;
+            height: auto;
+            border-radius: 8px;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>A-Trip Query System</h1>
+
+    <!-- Chat Box -->
+    <div id="chat-box" class="chat-box"></div>
+
+    <!-- Input Area -->
+    <div class="input-area">
+        <input type="text" id="query" placeholder="Ask something about A-Trip..." required>
+        <button id="submit-btn">Send</button>
+        <div id="loading-spinner" class="loading-spinner"></div>
+    </div>
+</div>
+
+<script>
+    // Elements
+    const queryInput = document.getElementById("query");
+    const submitBtn = document.getElementById("submit-btn");
+    const chatBox = document.getElementById("chat-box");
+    const loadingSpinner = document.getElementById("loading-spinner");
+
+    // Keeps track of chat history
+    let chatHistory = [];
+
+    // Function to display the chat in the chat box
+    function displayChatHistory() {
+        chatBox.innerHTML = ""; // Clear chat box
+        chatHistory.forEach(entry => {
+            const div = document.createElement("div");
+            div.classList.add("chat-entry");
+            div.classList.add(entry.role === 'user' ? "user-entry" : "bot-entry");
+            div.innerHTML = entry.message;
+            chatBox.appendChild(div);
+        });
+        chatBox.scrollTop = chatBox.scrollHeight; // Scroll to the bottom
+    }
+
+    // Function to send query and get response
+    async function sendQuery(query) {
+        // Add user query to chat history
+        chatHistory.push({ role: 'user', message: query });
+        displayChatHistory();
+
+        // Show loading spinner while waiting for the response
+        loadingSpinner.style.display = "inline-block";
+
+        try {
+            const response = await fetch("http://127.0.0.1:5000/query", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({ query: query }),
+            });
+
+            const data = await response.json();
+
+            // Hide loading spinner after receiving response
+            loadingSpinner.style.display = "none";
+
+            if (response.ok) {
+                // Add bot response to chat history
+                let responseText = data.response;
+                let imageHTML = '';
+
+                // If there are images, add them to the response
+                if (data.images && data.images.length > 0) {
+                    data.images.forEach(image => {
+                        imageHTML += `<div class="image-container"><img src="data:image/png;base64,${image.image_data}" alt="Image from page ${image.page_num}"></div>`;
+                    });
+                }
+
+                chatHistory.push({ role: 'bot', message: responseText + imageHTML });
+                displayChatHistory();
+            } else {
+                chatHistory.push({ role: 'bot', message: `Error: ${data.error || 'An unknown error occurred.'}` });
+                displayChatHistory();
+            }
+        } catch (error) {
+            // Hide loading spinner on error
+            loadingSpinner.style.display = "none";
+            console.error("Error:", error);
+            chatHistory.push({ role: 'bot', message: "Failed to connect to the server. Please try again later." });
+            displayChatHistory();
+        }
+    }
+
+    // Event listener for submit button
+    submitBtn.addEventListener("click", () => {
+        const query = queryInput.value.trim();
+        if (query) {
+            queryInput.value = ""; // Clear the input field
+            sendQuery(query);
+        }
+    });
+
+    // Optional: Allow pressing "Enter" to submit query
+    queryInput.addEventListener("keypress", (e) => {
+        if (e.key === "Enter") {
+            const query = queryInput.value.trim();
+            if (query) {
+                queryInput.value = ""; // Clear the input field
+                sendQuery(query);
+            }
+        }
+    });
+</script>
+
+</body>
+</html>
